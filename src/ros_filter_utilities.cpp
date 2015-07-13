@@ -35,6 +35,8 @@
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <ros/console.h>
+#include <iostream>
+
 
 std::ostream& operator<<(std::ostream& os, const tf2::Vector3 &vec)
 {
@@ -66,18 +68,38 @@ namespace RobotLocalization
 {
   namespace RosFilterUtilities
   {
+
+    std::string clean_frame_name(const std::string original){
+      // remove all leading '/' characters from a frame name,
+      // so it can be passed to lookupTransform.
+      // (While loop is possibly overkill here.)
+      std::string temp (original);
+      while (temp.length() > 1 && temp.at(0)=='/')
+	temp.erase(0,1);
+      return temp;
+    }
+
+
+
     bool lookupTransformSafe(const tf2_ros::Buffer &buffer,
                              const std::string &targetFrame,
                              const std::string &sourceFrame,
                              const ros::Time &time,
                              tf2::Transform &targetFrameTrans)
     {
+
+
+      // Clean these for use later
+      std::string targetFrameClean = clean_frame_name(targetFrame);
+      std::string sourceFrameClean = clean_frame_name(sourceFrame);
+      
+
       bool retVal = true;
 
       // First try to transform the data at the requested time
       try
       {
-        tf2::fromMsg(buffer.lookupTransform(targetFrame, sourceFrame, time).transform,
+        tf2::fromMsg(buffer.lookupTransform(targetFrameClean, sourceFrameClean, time).transform,
                      targetFrameTrans);
       }
       catch (tf2::TransformException &ex)
@@ -87,16 +109,16 @@ namespace RobotLocalization
         // transform and warn the user.
         try
         {
-          tf2::fromMsg(buffer.lookupTransform(targetFrame, sourceFrame, ros::Time(0)).transform,
+          tf2::fromMsg(buffer.lookupTransform(targetFrameClean, sourceFrameClean, ros::Time(0)).transform,
                        targetFrameTrans);
 
-          ROS_WARN_STREAM_THROTTLE(2.0, "Transform from " << sourceFrame << " to " << targetFrame <<
+          ROS_WARN_STREAM_THROTTLE(2.0, "Transform from " << sourceFrameClean << " to " << targetFrameClean <<
                                         " was unavailable for the time requested. Using latest instead.\n");
         }
         catch(tf2::TransformException &ex)
         {
-          ROS_WARN_STREAM_THROTTLE(2.0, "Could not obtain transform from " << sourceFrame <<
-                                        " to " << targetFrame << ". Error was " << ex.what() << "\n");
+          ROS_WARN_STREAM_THROTTLE(2.0, "Could not obtain transform from " << sourceFrameClean <<
+                                        " to " << targetFrameClean << ". Error was " << ex.what() << "\n");
 
           retVal = false;
         }
@@ -107,7 +129,7 @@ namespace RobotLocalization
       // would throw an exception, so check for this situation before giving up.
       if(!retVal)
       {
-        if(targetFrame == sourceFrame)
+        if(targetFrameClean == sourceFrameClean)
         {
           targetFrameTrans.setIdentity();
           retVal = true;
